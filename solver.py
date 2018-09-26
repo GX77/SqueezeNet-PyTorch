@@ -107,7 +107,7 @@ class Solver(object):
 
     def save_model(self, e, i):
         """
-        Saves a model per e epoch and i iterations
+        Saves a model per e epoch and i iteration
         """
         path = os.path.join(
             self.model_save_path,
