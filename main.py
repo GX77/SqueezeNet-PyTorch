@@ -26,8 +26,8 @@ def save_config(config):
         for k, v in sorted(args.items()):
             f.write('%s: %s\n' % (str(k), str(v)))
 
-    zipf = zipfile.ZipFile(save_name.format(
-        current_time, "zip"), 'w', zipfile.ZIP_DEFLATED)
+    zipf = zipfile.ZipFile(save_name.format(current_time, "zip"),
+                           'w', zipfile.ZIP_DEFLATED)
     zipdir('.', zipf)
     zipf.close()
 
@@ -71,16 +71,17 @@ if __name__ == '__main__':
     # training settings
     parser.add_argument('--lr', type=float, default=0.04)
     parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--weight_decay', type=float, default=0.0002)
     parser.add_argument('--num_epochs', type=int, default=70)
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--pretrained_model', type=str, default=None)
+    parser.add_argument('--pretrained_model', type=str,
+                        default=None)
 
     # misc
     parser.add_argument('--mode', type=str, default='train',
                         choices=['train', 'test'])
     parser.add_argument('--use_gpu', type=str2bool, default=True)
-    parser.add_argument('--use_tensorboard', type=str2bool,
-                        default=True)
+    parser.add_argument('--use_tensorboard', type=str2bool, default=True)
 
     # dataset
     parser.add_argument('--data_path', type=str,
