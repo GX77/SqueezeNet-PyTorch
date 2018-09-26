@@ -15,6 +15,10 @@ class Solver(object):
     DEFAULTS = {}
 
     def __init__(self, version, data_loader, config):
+        """
+        Initializes a Solver object
+        """
+
         # data loader
         self.__dict__.update(Solver.DEFAULTS, **config)
         self.version = version
@@ -22,37 +26,41 @@ class Solver(object):
 
         self.build_model()
 
-        # start with a trained model
+        # TODO: build tensorboard
+
+        # start with a pre-trained model
         if self.pretrained_model:
             self.load_pretrained_model()
 
     def build_model(self):
+        """
+        Instantiates the model, loss criterion, and optimizer
+        """
 
-        # instantiate SqueezeNet2 model
+        # instantiate model
         self.model = SqueezeNet2(self.input_channels, self.class_count)
 
         # instantiate loss criterion
         self.criterion = nn.CrossEntropyLoss()
 
         # instantiate optimizer
-        self.optimizer = optim.SGD(
-            self.model.parameters(),
-            lr=self.lr,
-            momentum=self.momentum,
-            weight_decay=0.0002
-        )
+        self.optimizer = optim.SGD(self.model.parameters(),
+                                   lr=self.lr,
+                                   momentum=self.momentum,
+                                   weight_decay=self.weight_decay)
 
-        # self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr,
-        #                            betas=(0.5, 0.999))
-
-        # print networks
+        # print network
         self.print_network(self.model, 'SqueezeNet2')
 
+        # use gpu if enabled
         if torch.cuda.is_available() and self.use_gpu:
             self.model.cuda()
             self.criterion.cuda()
 
     def print_network(self, model, name):
+        """
+        Prints the structure of the network and the total number of parameters
+        """
         num_params = 0
         for p in model.parameters():
             num_params += p.numel()
@@ -61,11 +69,17 @@ class Solver(object):
         print("The number of parameters: {}".format(num_params))
 
     def load_pretrained_model(self):
+        """
+        loads a pre-trained model from a .pth file
+        """
         self.model.load_state_dict(torch.load(os.path.join(
             self.model_save_path, '{}.pth'.format(self.pretrained_model))))
-        print('loaded trained model (step: {})'.format(self.pretrained_model))
+        print('loaded trained model ver {}'.format(self.pretrained_model))
 
     def print_loss_log(self, start_time, iters_per_epoch, e, i, loss):
+        """
+        Prints the loss and elapsed time for each epoch
+        """
         total_iter = self.num_epochs * iters_per_epoch
         cur_iter = e * iters_per_epoch + i
 
@@ -77,28 +91,34 @@ class Solver(object):
         total_time = str(datetime.timedelta(seconds=total_time))
         elapsed = str(datetime.timedelta(seconds=elapsed))
 
-        log = "Elapsed {}/{} -- {} , Epoch [{}/{}], Iter [{}/{}], " \
-              "loss: {:.4f}".format(
-               elapsed,
-               epoch_time,
-               total_time,
-               e + 1,
-               self.num_epochs,
-               i + 1,
-               iters_per_epoch,
-               loss
-               )
+        log = "Elapsed {}/{} -- {}, Epoch [{}/{}], Iter [{}/{}], " \
+              "loss: {:.4f}".format(elapsed,
+                                    epoch_time,
+                                    total_time,
+                                    e + 1,
+                                    self.num_epochs,
+                                    i + 1,
+                                    iters_per_epoch,
+                                    loss)
+
+        # TODO: add tensorboard
 
         print(log)
 
     def save_model(self, e, i):
+        """
+        Saves a model per e epoch and i iterations
+        """
         path = os.path.join(
             self.model_save_path,
-            '{}_{}_{}.pth'.format(self.version, e + 1, i + 1)
+            '/{}/{}--{}.pth'.format(self.version, e + 1, i + 1)
         )
         torch.save(self.model.state_dict(), path)
 
     def model_step(self, images, labels):
+        """
+        A step for each iteration
+        """
 
         # set model in training mode
         self.model.train()
@@ -121,32 +141,29 @@ class Solver(object):
         return loss
 
     def train(self):
+        """
+        Training process
+        """
         self.losses = []
         self.top_1_acc = []
         self.top_5_acc = []
 
         iters_per_epoch = len(self.data_loader)
 
-        # start with trained model if exists
+        # start with a trained model if exists
         if self.pretrained_model:
-            start = int(self.pretrained_model.split('_')[0])
+            start = int(self.pretrained_model.split('--')[0])
         else:
             start = 0
 
         # start training
-        iter_ctr = 0
         start_time = time.time()
         for e in range(start, self.num_epochs):
             for i, (images, labels) in enumerate(tqdm(self.data_loader)):
-                iter_ctr += 1
-                start = time.time()
-
                 images = to_var(images, self.use_gpu)
                 labels = to_var(labels, self.use_gpu)
 
                 loss = self.model_step(images, labels)
-
-            # self.scheduler.step(loss)
 
             # print out loss log
             if (e + 1) % self.loss_log_step == 0:
@@ -179,12 +196,17 @@ class Solver(object):
             print(e, '{:.4f}'.format(acc))
 
     def eval(self, data_loader):
+        """
+        Returns the count of top 1 and top 5 predictions
+        """
 
+        # set the model to eval mode
         self.model.eval()
 
         top_1_correct = 0
         top_5_correct = 0
         total = 0
+
         with torch.no_grad():
             for images, labels in data_loader:
 
@@ -210,6 +232,9 @@ class Solver(object):
         return top_1_correct.item(), top_5_correct, total
 
     def train_evaluate(self, e):
+        """
+        Evaluates the performance of the model using the train dataset
+        """
         top_1_correct, top_5_correct, total = self.eval(self.data_loader)
         log = "Epoch [{}/{}]--top_1_acc: {:.4f}--top_5_acc: {:.4f}".format(
             e + 1,
@@ -221,6 +246,9 @@ class Solver(object):
         return top_1_correct / total, top_5_correct / total
 
     def test(self):
+        """
+        Evaluates the performance of the model using the test dataset
+        """
         top_1_correct, top_5_correct, total = self.eval(self.data_loader)
         log = "top_1_acc: {:.4f}--top_5_acc: {:.4f}".format(
             top_1_correct / total,
